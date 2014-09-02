@@ -68,15 +68,46 @@ def get_likely_language(input_text):
             
     return (likely_language, likely_language_matches, total_matches)
 
-
-def main():
-    stream = twitter_conn()
-    T = None
-    while not T or 'delete' in raw_T:
-        T = Tweet(stream.next())
-
+def build_list_tweets(stream):
+    hold_tweets = []
     for i in range(5):
         T = Tweet(stream.next())
         if T:
             T['language'] = get_likely_language(T['text'])[0]
             print "%s, %i, %i: %s" % (get_likely_language(T['text']) + (T['text'],))
+            hold_tweets.append(T['text'])
+    return hold_tweets
+
+
+def filter_tweets(t):
+    return t.flatMap(lambda line: line.split(" ")).filter(lambda word: word.startswith('#'))
+
+def print_rdd(x):
+    print x.collect()
+
+
+def find_lang(t):
+
+    def check_lang(line):
+        input_words = wordpunct_tokenize(line.lower())
+        likely_language = 'unknown'
+        likely_language_matches = 0
+        stopword_sets = dict([(lang, set(stopwords.words(lang))) for lang in stopwords._fileids])
+        for language in np.random.permutation(stopwords._fileids):
+            language_matches = len(set(input_words) & stopword_sets[language])
+            if language_matches > likely_language_matches:
+                likely_language_matches = language_matches
+                likely_language = language        
+        return likely_language, line
+
+    return results.map(lambda line: check_lang(line)).min()
+
+def main():
+    stream = twitter_conn()
+    hold_tweets = build_list_tweets(stream)
+
+    t = sc.parallelize(hold_tweets)
+    return find_lang(t)
+
+    # load json data into rdd - tbd on how to process
+    # info = sc.parallelize([stream.next()])
